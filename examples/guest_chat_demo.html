@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guest Chat - Gemini Agent</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header .guest-id {
+            font-size: 12px;
+            opacity: 0.9;
+            font-family: monospace;
+        }
+
+        .chat-area {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .message.agent {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+        }
+
+        .message.system {
+            background: #fff3cd;
+            color: #856404;
+            text-align: center;
+            margin: 10px auto;
+            font-size: 13px;
+        }
+
+        .message.thinking {
+            background: #e3f2fd;
+            color: #1976d2;
+            text-align: center;
+            margin: 10px auto;
+            font-size: 13px;
+            font-style: italic;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 10px;
+        }
+
+        input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .stats {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-around;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #667eea;
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Gemini Agent Chat</h1>
+            <div class="guest-id">Guest ID: <span id="guestId">Loading...</span></div>
+        </div>
+
+        <div class="chat-area" id="chatArea">
+            <div class="message system">Welcome! You're chatting as a guest. Your session is private and encrypted.
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-value" id="sessionCount">0</span>
+                <span>Sessions</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" id="messagesCount">0</span>
+                <span>Messages</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" id="rateLimitRemaining">60</span>
+                <span>Rate Limit</span>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="Try: Calculate 5 * 5" />
+            <button id="sendButton">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // Configuration
+        // ============================================================
+        const API_BASE = 'http://localhost:8000/api/v1';
+        const API_KEY = 'change-me-in-production';
+
+        // ============================================================
+        // Guest User Management
+        // ============================================================
+        class GuestUserSession {
+            constructor() {
+                this.clientId = this.getOrCreateClientId();
+                this.deviceFingerprint = null;
+                this.sessionCount = 0;
+                this.messagesCount = 0;
+            }
+
+            getOrCreateClientId() {
+                let clientId = localStorage.getItem('guest_client_id');
+                if (!clientId) {
+                    clientId = crypto.randomUUID();
+                    localStorage.setItem('guest_client_id', clientId);
+                    localStorage.setItem('guest_created_at', new Date().toISOString());
+                }
+                return clientId;
+            }
+
+            async init() {
+                // Generate device fingerprint (simple version)
+                this.deviceFingerprint = await this.generateFingerprint();
+
+                // Update UI
+                document.getElementById('guestId').textContent =
+                    this.clientId.substring(0, 8) + '...';
+
+                // Load stats from localStorage
+                this.sessionCount = parseInt(localStorage.getItem('session_count') || '0');
+                this.messagesCount = parseInt(localStorage.getItem('messages_count') || '0');
+                this.updateStats();
+            }
+
+            async generateFingerprint() {
+                const data = [
+                    navigator.userAgent,
+                    navigator.language,
+                    screen.width + 'x' + screen.height,
+                    new Date().getTimezoneOffset(),
+                    navigator.hardwareConcurrency || 'unknown'
+                ].join('|');
+
+                const hash = await crypto.subtle.digest(
+                    'SHA-256',
+                    new TextEncoder().encode(data)
+                );
+
+                return Array.from(new Uint8Array(hash))
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('');
+            }
+
+            getHeaders() {
+                return {
+                    'Authorization': `Bearer ${this.clientId}`,
+                    'X-API-Key': API_KEY,
+                    'X-Device-Fingerprint': this.deviceFingerprint,
+                    'Content-Type': 'application/json'
+                };
+            }
+
+            updateStats() {
+                document.getElementById('sessionCount').textContent = this.sessionCount;
+                document.getElementById('messagesCount').textContent = this.messagesCount;
+            }
+
+            incrementStats() {
+                this.sessionCount++;
+                this.messagesCount++;
+                localStorage.setItem('session_count', this.sessionCount);
+                localStorage.setItem('messages_count', this.messagesCount);
+                this.updateStats();
+            }
+        }
+
+        // ============================================================
+        // Chat Interface
+        // ============================================================
+        class ChatInterface {
+            constructor(guestSession) {
+                this.guest = guestSession;
+                this.chatArea = document.getElementById('chatArea');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
+                this.thinkingMessage = null;
+
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                this.sendButton.addEventListener('click', () => this.sendMessage());
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.sendMessage();
+                });
+            }
+
+            addMessage(text, sender) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${sender}`;
+                messageDiv.textContent = text;
+                this.chatArea.appendChild(messageDiv);
+                this.chatArea.scrollTop = this.chatArea.scrollHeight;
+                return messageDiv;
+            }
+
+            showThinking(show = true) {
+                if (show) {
+                    if (!this.thinkingMessage) {
+                        this.thinkingMessage = document.createElement('div');
+                        this.thinkingMessage.className = 'message thinking';
+                        this.thinkingMessage.textContent = '💭 AI is thinking...';
+                        this.chatArea.appendChild(this.thinkingMessage);
+                        this.chatArea.scrollTop = this.chatArea.scrollHeight;
+                    }
+                } else {
+                    if (this.thinkingMessage) {
+                        this.thinkingMessage.remove();
+                        this.thinkingMessage = null;
+                    }
+                }
+            }
+
+            async sendMessage() {
+                const message = this.messageInput.value.trim();
+                if (!message) return;
+
+                // Add user message to UI
+                this.addMessage(message, 'user');
+                this.messageInput.value = '';
+                this.messageInput.disabled = true;
+                this.sendButton.disabled = true;
+
+                let agentResponse = '';
+
+                try {
+                    const response = await fetch(`${API_BASE}/chat/stream`, {
+                        method: 'POST',
+                        headers: this.guest.getHeaders(),
+                        body: JSON.stringify({ message })
+                    });
+
+                    // Update rate limit
+                    const remaining = response.headers.get('X-RateLimit-Remaining');
+                    if (remaining) {
+                        document.getElementById('rateLimitRemaining').textContent = remaining;
+                    }
+
+                    if (response.status === 429) {
+                        this.addMessage('⚠️ Rate limit exceeded. Please wait a moment.', 'system');
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        this.addMessage(`❌ Error: ${error.detail}`, 'system');
+                        return;
+                    }
+
+                    // Read SSE stream
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        // Decode chunk and add to buffer
+                        buffer += decoder.decode(value, { stream: true });
+
+                        // Process complete SSE messages (lines ending with \n\n)
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop(); // Keep incomplete line in buffer
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const event = JSON.parse(line.substring(6));
+
+                                    // Handle different event types
+                                    switch (event.type) {
+                                        case 'start':
+                                            console.log('Stream started:', event.session_id);
+                                            break;
+
+                                        case 'thinking':
+                                            this.showThinking(true);
+                                            break;
+
+                                        case 'tool_call':
+                                            this.addMessage(`🔧 Using ${event.name}...`, 'system');
+                                            break;
+
+                                        case 'tool_result':
+                                            this.addMessage(`📊 Result: ${event.result}`, 'system');
+                                            break;
+
+                                        case 'response':
+                                            this.showThinking(false);
+                                            agentResponse = event.content;
+                                            break;
+
+                                        case 'complete':
+                                            this.showThinking(false);
+                                            if (agentResponse) {
+                                                this.addMessage(agentResponse, 'agent');
+                                            }
+                                            // Update stats
+                                            this.guest.incrementStats();
+                                            break;
+
+                                        case 'error':
+                                            this.showThinking(false);
+                                            this.addMessage(`❌ ${event.message}`, 'system');
+                                            break;
+                                    }
+                                } catch (parseError) {
+                                    console.error('Failed to parse SSE event:', line, parseError);
+                                }
+                            }
+                        }
+                    }
+
+                } catch (error) {
+                    this.showThinking(false);
+                    console.error('Chat error:', error);
+                    this.addMessage(`❌ Network error: ${error.message}`, 'system');
+                } finally {
+                    this.messageInput.disabled = false;
+                    this.sendButton.disabled = false;
+                    this.messageInput.focus();
+                }
+            }
+        }
+
+        // ============================================================
+        // Initialize Application
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', async () => {
+            const guestSession = new GuestUserSession();
+            await guestSession.init();
+
+            const chat = new ChatInterface(guestSession);
+
+            console.log('🔐 Guest User Session Initialized');
+            console.log('Client ID:', guestSession.clientId);
+            console.log('Device Fingerprint:', guestSession.deviceFingerprint.substring(0, 16) + '...');
+        });
+    </script>
+</body>
+
+</html>
