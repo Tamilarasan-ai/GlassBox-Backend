@@ -27,6 +27,14 @@ async def lifespan(app: FastAPI):
     logger.info(f"Log level: {logging.getLevelName(logging.getLogger().level)}")
     logger.info(f"API Key configured: {'✓' if settings.API_KEY else '✗'}")
     logger.info(f"Gemini API Key configured: {'✓' if settings.GEMINI_API_KEY else '✗'}")
+    
+    # Sync agent model config with .env
+    from app.core.startup import sync_agent_model_config
+    from app.db.session import AsyncSessionLocal
+    
+    async with AsyncSessionLocal() as db:
+        await sync_agent_model_config(db)
+    
     yield
     # Shutdown
     logger.info("👋 Application shutting down...")
@@ -42,7 +50,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from app.api.v1 import chat, traces, stream, mock_stream, analytics
+from app.api.v1 import chat, traces, stream, analytics
 
 # CORS Configuration
 app.add_middleware(

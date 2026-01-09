@@ -49,6 +49,37 @@ async def stream_agent_execution(
     try:
         # 1. Get Session
         yield {"type": "start", "session_id": str(session_id)}
+        
+        session = await db.get(Session, session_id)
+        if not session:
+            yield {"type": "error", "message": "Session not found"}
+            return
+            
+        # 2. Create High-Level Trace
+        trace = await crud_trace.create_trace(
+            db=db,
+            session_id=session.id,
+            agent_id=session.agent_id,
+            user_input=user_input,
+            run_name="chat_turn"
+        )
+        
+        # Capture system snapshots for observability
+        from app.models.agent import Agent
+        agent = await db.get(Agent, session.agent_id)
+        if agent:
+            trace.system_prompt_snapshot = agent.system_prompt
+            trace.model_config_snapshot = agent.model_config
+            await db.commit()
+            await db.refresh(trace)
+        
+        # 3. Build Context & Tools
+        from app.engine.agent_engine import AgentEngine
+        engine = AgentEngine(db, session_id)
+        history = await engine._get_history_context()
+        
+        # Define tools
+        tools = [
             types.Tool(
                 function_declarations=[
                     types.FunctionDeclaration(
@@ -107,7 +138,7 @@ async def stream_agent_execution(
         
         # Main loop
         for iteration in range(max_iter):
-            step_count += 1
+            # Removed automatic increment - each step increments explicitly
             
             # Validate response
             if not hasattr(response, 'candidates') or not response.candidates:
@@ -134,6 +165,34 @@ async def stream_agent_execution(
                 tool_name = fc.name
                 tool_args = dict(fc.args)
                 
+                # ARQ Pattern: Emit reasoning event BEFORE action
+                yield {
+                    "type": "thinking",
+                    "content": f"I need to use the {tool_name} tool to answer this question"
+                }
+                
+                # Log ARQ reasoning step with timing
+                step_count += 1
+                arq_start = time.time()
+                arq_step = await crud_trace.create_trace_step(
+                    db=db,
+                    trace_id=trace.id,
+                    sequence_order=step_count,
+                    step_type="thought",
+                    step_name="reasoning",
+                    output_payload={
+                        "thought": f"Analyzing request - I need to use the {tool_name} tool",
+                        "reasoning": "Determined that tool usage is required to answer the question"
+                    }
+                )
+                # Complete ARQ thought
+                arq_latency = int((time.time() - arq_start) * 1000)
+                await crud_trace.update_trace_step(
+                    db=db,
+                    step_id=arq_step.id,
+                    latency_ms=arq_latency,
+                    completed_at=datetime.utcnow()
+                )
                 # Stream tool call event
                 yield {
                     "type": "tool_call",
@@ -142,7 +201,9 @@ async def stream_agent_execution(
                 }
                 
                 # Log to trace
-                await crud_trace.create_trace_step(
+                step_count += 1  # Increment for tool_call
+                tool_call_start = time.time()
+                tool_call_step = await crud_trace.create_trace_step(
                     db=db,
                     trace_id=trace.id,
                     sequence_order=step_count,
@@ -162,6 +223,15 @@ async def stream_agent_execution(
                     except Exception as e:
                         tool_result = f"Error: {str(e)}"
                 
+                # Complete tool_call step
+                tool_call_latency = int((time.time() - tool_call_start) * 1000)
+                await crud_trace.update_trace_step(
+                    db=db,
+                    step_id=tool_call_step.id,
+                    latency_ms=tool_call_latency,
+                    completed_at=datetime.utcnow()
+                )
+                
                 # Stream tool result
                 yield {
                     "type": "tool_result",
@@ -169,15 +239,24 @@ async def stream_agent_execution(
                     "result": tool_result
                 }
                 
-                # Log result
+                # Log result with timing
                 step_count += 1
-                await crud_trace.create_trace_step(
+                tool_result_start = time.time()
+                tool_result_step = await crud_trace.create_trace_step(
                     db=db,
                     trace_id=trace.id,
                     sequence_order=step_count,
                     step_type="tool_result",
                     step_name=tool_name,
                     output_payload={"result": tool_result}
+                )
+                # Complete tool_result step
+                tool_result_latency = int((time.time() - tool_result_start) * 1000)
+                await crud_trace.update_trace_step(
+                    db=db,
+                    step_id=tool_result_step.id,
+                    latency_ms=tool_result_latency,
+                    completed_at=datetime.utcnow()
                 )
                 
                 # Continue conversation
@@ -216,14 +295,24 @@ async def stream_agent_execution(
                     "content": text_content
                 }
                 
-                # Log thought
-                await crud_trace.create_trace_step(
+                # Log thought with timing
+                step_count += 1
+                final_thought_start = time.time()
+                final_thought_step = await crud_trace.create_trace_step(
                     db=db,
                     trace_id=trace.id,
                     sequence_order=step_count,
                     step_type="thought",
                     step_name="reasoning",
                     output_payload={"thought": text_content}
+                )
+                # Complete final thought
+                final_thought_latency = int((time.time() - final_thought_start) * 1000)
+                await crud_trace.update_trace_step(
+                    db=db,
+                    step_id=final_thought_step.id,
+                    latency_ms=final_thought_latency,
+                    completed_at=datetime.utcnow()
                 )
                 
                 final_response = text_content

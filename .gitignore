@@ -54,3 +54,22 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+# Virtual Environment
+.venv/
+venv/
+ENV/
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

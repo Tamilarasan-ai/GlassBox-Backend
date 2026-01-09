@@ -80,6 +80,51 @@ async def create_trace_step(
     return step
 
 
+async def update_trace_step(
+    db: AsyncSession,
+    step_id: UUID,
+    latency_ms: int | None = None,
+    tokens: int | None = None,
+    cost_usd: float | None = None,
+    completed_at: Any | None = None,
+) -> TraceStep:
+    """
+    Update trace step with completion metrics
+    
+    Args:
+        db: Database session
+        step_id: Step ID to update
+        latency_ms: Step execution time in milliseconds
+        tokens: Tokens used for this step (LLM calls only)
+        cost_usd: Cost for this step
+        completed_at: Completion timestamp
+        
+    Returns:
+        Updated step object
+    """
+    from decimal import Decimal
+    
+    step = await db.get(TraceStep, step_id)
+    if not step:
+        raise ValueError(f"TraceStep {step_id} not found")
+    
+    if latency_ms is not None:
+        step.latency_ms = latency_ms
+    
+    if tokens is not None:
+        step.tokens = tokens
+    
+    if cost_usd is not None:
+        step.cost_usd = Decimal(str(cost_usd))
+    
+    if completed_at is not None:
+        step.completed_at = completed_at
+    
+    await db.commit()
+    await db.refresh(step)
+    return step
+
+
 async def update_trace(
     db: AsyncSession,
     trace_id: UUID,

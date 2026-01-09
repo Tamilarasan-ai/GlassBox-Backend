@@ -149,7 +149,7 @@ class AgentEngine:
             
             # Main ReAct loop
             for iteration in range(max_iter):
-                step_count += 1
+                # Removed automatic increment - each step increments explicitly
                 
                 # Comprehensive validation of response structure
                 if not hasattr(response, 'candidates') or not response.candidates:
@@ -183,8 +183,34 @@ class AgentEngine:
                     tool_name = fc.name
                     tool_args = dict(fc.args)
                     
+                    # ARQ Pattern: Log reasoning BEFORE action
+                    step_count += 1
+                    arq_start = time.time()
+                    arq_step = await crud_trace.create_trace_step(
+                        db=self.db,
+                        trace_id=trace.id,
+                        sequence_order=step_count,
+                        step_type="thought",
+                        step_name="reasoning",
+                        output_payload={
+                            "thought": f"Analyzing request - I need to use the {tool_name} tool",
+                            "reasoning": "Determined that tool usage is required to answer the question"
+                        }
+                    )
+                    # Complete ARQ thought step (instant, no API call)
+                    arq_latency = int((time.time() - arq_start) * 1000)
+                    await crud_trace.update_trace_step(
+                        db=self.db,
+                        step_id=arq_step.id,
+                        latency_ms=arq_latency,
+                        completed_at=datetime.utcnow()
+                    )
+                    logger.debug(f"ARQ: Logged pre-action reasoning for {tool_name} ({arq_latency}ms)")
+                    
                     # Log Tool Call Step
-                    await crud_trace.create_trace_step(
+                    step_count += 1  # Increment for tool_call
+                    tool_call_start = time.time()
+                    tool_call_step = await crud_trace.create_trace_step(
                         db=self.db,
                         trace_id=trace.id,
                         sequence_order=step_count,
@@ -204,15 +230,33 @@ class AgentEngine:
                         except Exception as e:
                             tool_result = f"Error executing tool: {str(e)}"
                     
+                    # Complete tool_call step with timing
+                    tool_call_latency = int((time.time() - tool_call_start) * 1000)
+                    await crud_trace.update_trace_step(
+                        db=self.db,
+                        step_id=tool_call_step.id,
+                        latency_ms=tool_call_latency,
+                        completed_at=datetime.utcnow()
+                    )
+                    
                     # Log Tool Result
                     step_count += 1
-                    await crud_trace.create_trace_step(
+                    tool_result_start = time.time()
+                    tool_result_step = await crud_trace.create_trace_step(
                         db=self.db,
                         trace_id=trace.id,
                         sequence_order=step_count,
                         step_type="tool_result",
                         step_name=tool_name,
                         output_payload={"result": tool_result}
+                    )
+                    # Complete tool_result step
+                    tool_result_latency = int((time.time() - tool_result_start) * 1000)
+                    await crud_trace.update_trace_step(
+                        db=self.db,
+                        step_id=tool_result_step.id,
+                        latency_ms=tool_result_latency,
+                        completed_at=datetime.utcnow()
                     )
                     
                     # Add function response to contents
@@ -246,14 +290,24 @@ class AgentEngine:
                     # Text response - final answer
                     text_content = part.text
                     
-                    # Log Thought Step
-                    await crud_trace.create_trace_step(
+                    # Log final thought with timing
+                    step_count += 1
+                    final_thought_start = time.time()
+                    final_thought_step = await crud_trace.create_trace_step(
                         db=self.db,
                         trace_id=trace.id,
                         sequence_order=step_count,
                         step_type="thought",
                         step_name="reasoning",
                         output_payload={"thought": text_content}
+                    )
+                    # Complete final thought step
+                    final_thought_latency = int((time.time() - final_thought_start) * 1000)
+                    await crud_trace.update_trace_step(
+                        db=self.db,
+                        step_id=final_thought_step.id,
+                        latency_ms=final_thought_latency,
+                        completed_at=datetime.utcnow()
                     )
                     
                     final_response = text_content
