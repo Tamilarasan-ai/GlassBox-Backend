@@ -11,45 +11,44 @@ A production-ready FastAPI backend implementing a transparent, observable AI age
 ### System Architecture
 ```mermaid
 graph TB
-    subgraph "Client Layer"
+    subgraph ClientLayer["Client Layer"]
         FE[Frontend/Client]
     end
     
-    subgraph "API Gateway"
+    subgraph APIGateway["API Gateway"]
         CORS[CORS Middleware]
         AUTH[Authentication]
         RATE[Rate Limiter]
     end
     
-    subgraph "API Endpoints"
-        STREAM[/chat/stream<br/>SSE Streaming]
-        TRACES[/traces<br/>List & Detail]
-        REPLAY[/traces/:id/replay<br/>Replay]
-        SESSION[/sessions<br/>Management]
+    subgraph APIEndpoints["API Endpoints"]
+        STREAM["/chat/stream<br/>SSE Streaming"]
+        TRACES["/traces<br/>List & Detail"]
+        REPLAY["/traces/:id/replay<br/>Replay"]
+        SESSION["/sessions<br/>Management"]
     end
     
-    subgraph "Agent Engine"
-        direction TB
-        ARQ[ARQ Pattern:<br/>1. Thought<br/>2. Action<br/>3. Observation]
-        METRICS[Metrics Tracker:<br/>Tokens, Cost, Latency]
+    subgraph AgentEngine["Agent Engine"]
+        ARQ["ARQ Pattern:<br/>1. Thought<br/>2. Action<br/>3. Observation"]
+        METRICS["Metrics Tracker:<br/>Tokens, Cost, Latency"]
         SNAPSHOT[System Snapshots]
     end
     
-    subgraph "Tool Execution"
+    subgraph ToolExecution["Tool Execution"]
         CALC[Calculator Tool]
         TOOLS[Extensible Tools]
     end
     
-    subgraph "LLM Provider"
-        GEMINI[Google Gemini API<br/>gemini-2.5-flash]
+    subgraph LLMProvider["LLM Provider"]
+        GEMINI["Google Gemini API<br/>gemini-2.5-flash"]
     end
     
-    subgraph "Persistence Layer"
-        DB[(PostgreSQL<br/>AsyncPG)]
-        ENCRYPT[Encryption at Rest<br/>AES-256]
+    subgraph PersistenceLayer["Persistence Layer"]
+        DB[("PostgreSQL<br/>AsyncPG")]
+        ENCRYPT["Encryption at Rest<br/>AES-256"]
     end
     
-    subgraph "Observability"
+    subgraph Observability["Observability"]
         TRACE_DB[Trace Storage]
         STEP_DB[Step-by-Step Logs]
         METRICS_DB[Per-Step Metrics]
@@ -94,6 +93,8 @@ graph TB
     style GEMINI fill:#FF9800,stroke:#333,stroke-width:2px,color:#fff
     style DB fill:#9C27B0,stroke:#333,stroke-width:2px,color:#fff
 ```
+
+
 ---
 
 ### Database Schema
