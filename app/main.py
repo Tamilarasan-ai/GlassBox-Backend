@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1 import chat, traces
 from app.core.config import settings
-from app.db.session import engine
+from app.db.session import engine, get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends
 import app.models  # Register models
 
 # Configure logging
@@ -78,11 +80,27 @@ async def root():
     }
 
 
+
 @app.get("/health")
-async def health():
-    """Detailed health check"""
+async def health(db: AsyncSession = Depends(get_db)):
+    """Detailed health check with actual DB connectivity test"""
+    from sqlalchemy import text
+    from datetime import datetime
+    
+    try:
+        # Perform a simple query to verify DB connectivity
+        await db.execute(text("SELECT 1"))
+        db_status = "connected"
+        status = "healthy"
+    except Exception as e:
+        logger.error(f"Database health check failed: {e}")
+        db_status = "disconnected"
+        status = "unhealthy"
+    
     return {
-        "status": "healthy",
-        "database": "connected",
-        "service": settings.PROJECT_NAME
+        "status": status,
+        "database": db_status,
+        "service": settings.PROJECT_NAME,
+        "timestamp": datetime.utcnow().isoformat()
     }
+

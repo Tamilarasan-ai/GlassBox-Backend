@@ -1,4 +1,4 @@
-### Quraite Agent Platform (v1.0)
+### GlassBoxAgent Platform (v1.0)
 
 **Objective:** Build a high-observability "Glass-Box" Agent Execution Environment.
 

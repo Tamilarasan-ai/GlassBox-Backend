@@ -188,7 +188,10 @@ async def get_session_traces(
     result = await db.execute(
         select(Trace)
         .options(selectinload(Trace.steps))
-        .where(Trace.session_id == session_id)
+        .where(
+            Trace.session_id == session_id,
+            Trace.is_active == True
+        )
         .order_by(Trace.created_at.desc())
     )
     
@@ -213,7 +216,7 @@ async def get_traces(
     Returns:
         List of traces ordered by created_at descending
     """
-    query = select(Trace).order_by(Trace.created_at.desc())
+    query = select(Trace).where(Trace.is_active == True).order_by(Trace.created_at.desc())
     
     if session_id:
         query = query.where(Trace.session_id == session_id)
@@ -239,7 +242,7 @@ async def count_traces(
     """
     from sqlalchemy import func
     
-    query = select(func.count(Trace.id))
+    query = select(func.count(Trace.id)).where(Trace.is_active == True)
     
     if session_id:
         query = query.where(Trace.session_id == session_id)
@@ -265,7 +268,10 @@ async def get_trace_with_steps(
     query = (
         select(Trace)
         .options(selectinload(Trace.steps))
-        .where(Trace.id == trace_id)
+        .where(
+            Trace.id == trace_id,
+            Trace.is_active == True
+        )
     )
     result = await db.execute(query)
     return result.scalar_one_or_none()
@@ -285,4 +291,30 @@ async def get_trace(
     Returns:
         Trace object or None if not found
     """
-    return await db.get(Trace, trace_id)
+    trace = await db.get(Trace, trace_id)
+    if trace and not trace.is_active:
+        return None
+    return trace
+
+
+async def delete_trace(
+    db: AsyncSession,
+    trace_id: UUID,
+) -> bool:
+    """
+    Soft delete a trace by setting is_active=False
+    
+    Args:
+        db: Database session
+        trace_id: Trace ID
+        
+    Returns:
+        True if deleted, False if not found
+    """
+    trace = await db.get(Trace, trace_id)
+    if not trace or not trace.is_active:
+        return False
+        
+    trace.is_active = False
+    await db.commit()
+    return True

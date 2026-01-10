@@ -11,7 +11,7 @@ sequenceDiagram
 
     Note over User, DB: 🟢 PHASE 1: SESSION INITIALIZATION (Guest Mode)
 
-    User->>UI: Opens Quraite Platform
+    User->>UI: Opens GlassBoxPlatform
     UI->>UI: Check localStorage for 'quraite_user_id'
     alt New User
         UI->>UI: Generate new UUID (client_id)

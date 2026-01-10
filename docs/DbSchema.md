@@ -83,7 +83,7 @@ You can run this directly in your SQL client (e.g., DBeaver, pgAdmin) or put it 
 
 ```sql
 -- ====================================================================
--- Quraite Agent Platform - PostgreSQL Schema (Production-Ready Final)
+-- GlassBoxAgent Platform - PostgreSQL Schema (Production-Ready Final)
 -- Incorporates: Glass-Box Observability, Cost Tracking, and Snapshots
 -- ID Strategy: UUID (using gen_random_uuid())
 -- Timezone: All timestamps are TIMESTAMPTZ (UTC)

@@ -56,6 +56,8 @@ class TraceResponse(BaseModel):
     latency_ms: int
     is_successful: bool
     error_message: str | None
+    system_prompt_snapshot: str | None
+    model_config_snapshot: dict | None
     environment: str
     created_at: datetime
     completed_at: datetime | None

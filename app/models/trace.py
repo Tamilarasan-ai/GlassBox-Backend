@@ -56,6 +56,7 @@ class Trace(Base, TimestampMixin):
     
     # Status & Error Handling
     is_successful: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     
     # Glass Box Observability Snapshots

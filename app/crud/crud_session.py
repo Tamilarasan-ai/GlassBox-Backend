@@ -17,6 +17,7 @@ async def get_or_create_session(
     db: AsyncSession,
     guest_user_id: UUID,
     user_input: str | None = None,
+    session_id: UUID | None = None,
 ) -> Session:
     """
     Get existing active session for guest user or create new one
@@ -26,10 +27,26 @@ async def get_or_create_session(
         db: Database session
         guest_user_id: UUID of authenticated guest user
         user_input: Initial user input (for new sessions)
+        session_id: Optional specific session ID to resume
         
     Returns:
         Active session object
     """
+    # If specific session requested, try to find it
+    if session_id:
+        result = await db.execute(
+            select(Session)
+            .where(
+                Session.id == session_id,
+                Session.guest_user_id == guest_user_id
+            )
+        )
+        existing_session = result.scalar_one_or_none()
+        if existing_session:
+            logger.info(f"✓ Resuming specific session: {existing_session.id}")
+            return existing_session
+        logger.warning(f"Requested session {session_id} not found for user {guest_user_id}")
+
     # Try to find an active session for this guest user
     result = await db.execute(
         select(Session)
@@ -115,9 +132,13 @@ async def get_session(
     Returns:
         Session object with traces or None
     """
+    from app.models.trace import Trace
+
     result = await db.execute(
         select(Session)
-        .options(selectinload(Session.traces))
+        .options(
+            selectinload(Session.traces).selectinload(Trace.steps)
+        )
         .where(Session.id == session_id)
     )
     

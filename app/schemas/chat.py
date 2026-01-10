@@ -7,6 +7,7 @@ class ChatRequest(BaseModel):
     """Schema for chat request"""
     message: str = Field(..., min_length=1, description="User message")
     user_id: str | None = Field(None, description="Optional user identifier")
+    session_id: UUID | None = Field(None, description="Session ID to resume")
     max_iterations: int | None = Field(None, gt=0, le=50, description="Max agent iterations")
 
 

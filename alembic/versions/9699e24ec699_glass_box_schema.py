@@ -18,7 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     # ====================================================================
-    # Quraite Agent Platform - PostgreSQL Schema (Production-Ready Final)
+    # GlassBoxAgent Platform - PostgreSQL Schema (Production-Ready Final)
     # ====================================================================
 
     op.execute('CREATE EXTENSION IF NOT EXISTS "pgcrypto";')

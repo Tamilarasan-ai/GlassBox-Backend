@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     
     # Security
-    API_KEY: str = "change-me-in-production"
-    SECRET_KEY: str = "change-me-in-production"
+    API_KEY: str = "guest-user-test-key"
+    SECRET_KEY: str = "guest-user-test-key"
     
     # Agent Configuration
     AGENT_MAX_ITERATIONS: int = 10

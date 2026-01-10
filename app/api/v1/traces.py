@@ -65,7 +65,7 @@ async def get_session_traces(
     
     return {
         "session_id": session_id,
-        "traces": sorted(session.traces, key=lambda t: t.created_at)
+        "traces": [schemas.TraceDetailResponse.model_validate(t) for t in sorted(session.traces, key=lambda t: t.created_at)]
     }
 
 
@@ -174,3 +174,25 @@ async def replay_trace(
         new_trace_id=new_trace.id,
         message=f"Trace replayed successfully. Status: {result['status']}"
     )
+
+
+@router.delete("/traces/{trace_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_trace(
+    trace_id: UUID,
+    db: DBSession,
+    api_key: APIKey,
+):
+    """
+    Soft delete a trace
+    """
+    from app.crud import crud_trace
+    
+    success = await crud_trace.delete_trace(db=db, trace_id=trace_id)
+    
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Trace {trace_id} not found"
+        )
+    
+    return None

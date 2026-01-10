@@ -44,6 +44,7 @@ async def stream_chat(
             db=db,
             guest_user_id=guest_user.id,
             user_input=request.message,
+            session_id=request.session_id,
         )
         
         async def event_generator():
